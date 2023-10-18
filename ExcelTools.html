@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Excel工具</title>
+</head>
+<link rel="stylesheet" href="./ExcelTools.css">
+<script lang="javascript" src="./dist_xlsx.full.min.js"></script>
+<link rel="stylesheet" href="//unpkg.com/element-plus/dist/index.css" />
+<script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+<script src="//unpkg.com/element-plus"></script>
+
+<body>
+  <div class="container" id="app">
+    <h3>{{title}}导入导出</h3>
+    <div class="modal-area">
+      <div class="modal-title">{{title}}导入文件项</div>
+      <div class="excel-header-list">
+        <div class="list-item" v-for="(i, k) in headerList">
+          <label class="header_label">表头{{k+1}}:</label>
+          <input class="herder_value" :readonly="isFixed" :disabled="isFixed" type="text" v-model="i.head_v">
+          <label class="header_label">输出名(可选):</label>
+          <input class="herder_value" :readonly="isFixed" :disabled="isFixed" type="text" v-model="i.output_v">
+          <div class="header-group">
+            <label class="header_label">重复的表头名称</label>
+            <input style="margin-top: 5px;flex-shrink: 0;" type="checkbox" :id="`repeat_no_${k}`" :name="`drone_${k}`"
+              v-model="i.is_repeat" checked :disabled="isFixed" />
+            <label :for="`repeat_no_${k}`" class="header-checkbox">存在</label>
+            <template v-if="i.is_repeat">
+              <label class="header_label">重复次数(不算本次)</label>
+              <input type="number" v-model="i.repeat_count" min="0" :disabled="isFixed"
+                style="width: 50px;flex-shrink: 0;margin-right: 10px;">
+            </template>
+          </div>
+          <!-- <label class="header_label">是否为分组项:</label>
+          <div>
+            <input type="radio" :name="'contact_'+ k" :value="true" v-model="i.is_group" @change="changeGroupItem(i, k)"/>
+            <label for="contactChoice1">是</label>
+            <input type="radio" :name="'contact_'+ k" :value="false" v-model="i.is_group" @change="changeGroupItem(i, k)"/>
+            <label for="contactChoice1">否</label>
+          </div> -->
+        </div>
+      </div>
+      <div class="button-area">
+        <el-button @click="addHeader" :size="elSize" type="primary">添加表头项</el-button>
+        <div>
+          <el-button @click="confirmHeader" :size="elSize" type="primary">确定</el-button>
+          <el-button @click="cancelHeader" :size="elSize">取消</el-button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-area">
+      <div class="modal-title">{{title}}导出文件项</div>
+      <div class="tab-group">
+        <span :class="['tab-item',tabType == 'same' ? 'tab-item-select' : '']" @click="tabType = 'same'">采用统一的配置项</span>
+        <span :class="['tab-item',tabType == 'different' ? 'tab-item-select' : '', 'disable-box']" @click="tabType = 'different'">不采用统一的配置项</span>
+      </div>
+
+      <template v-if="tabType == 'same'">
+        <div class="list-item" v-for="(g, k) in exprotGroup" :key="k">
+          <label class="header_label">分组名称:</label>
+          <input class="herder_value_small" :readonly="isFixedOutput" :disabled="isFixedOutput" type="text" v-model="g.group_name" >
+          <label class="header_label">包含的表头:</label>
+          <el-select v-model="g.excel_headers" placeholder="Select" :size="elSize">
+            <el-option
+              v-for="item in headerList"
+              :key="item.value"
+              :label="item.head_v"
+              :value="item.head_v"
+            />
+          </el-select>
+        </div>
+        <div class="add-icon-btn" @click="addGroupName">+</div>
+      </template>
+      <template v-if="exprotGroup.length > 1">
+        <div class="modal-title" style="margin-top: 10px;">多个分组依据及对应条件</div>
+        <div v-for="(i, k) in exprotGroup" :key="k">
+          <label class="header_label">分组{{k+1}}</label>
+          <el-select v-model="i.rulesHeader" placeholder="Select" :size="elSize">
+            <el-option
+              v-for="item in headerList"
+              :key="item.value"
+              :label="item.head_v"
+              :value="item.head_v"
+            />
+          </el-select>
+          <input class="herder_value_small" :readonly="isFixedOutput" :disabled="isFixedOutput" type="text" v-model="i.rulesValue" >
+        </div>
+      </template>
+      <div class="button-area">
+        <div></div>
+        <div>
+          <button @click="confirmOutput">确定</button>
+          <button @click="cancelOutput">取消</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-area">
+      <div class="modal-title">上传excel文件</div>
+      <input id="file_input" type="file" @change="uploadFile">
+    </div>
+    <div class="modal-area">
+      <pre class="pre-area">{{ outputData }}</pre>
+    </div>
+  </div>
+</body>
+<script>
+  const { createApp, ref, reactive } = Vue;
+  createApp({
+    setup() {
+      const elSize = 'small';
+      let headerList = reactive([
+        {
+          head_v: '',
+          output_v: '',
+          is_repeat: false,
+          repeat_count: 0,
+          is_group: false
+        },
+        {
+          head_v: '',
+          output_v: '',
+          is_repeat: false,
+          repeat_count: 0,
+          is_group: false
+        },
+        {
+          head_v: '',
+          output_v: '',
+          is_repeat: false,
+          repeat_count: 0,
+          is_group: false
+        }
+      ]);
+      let isFixed  = ref(false);
+      let isFixedOutput = ref(false);
+      let title = ref('Excel');
+      let tabType = ref('same');
+      let exprotGroup = reactive([{
+        group_name: '',
+        excel_headers: [],
+        rulesHeader: '',
+        rulesValue: ''
+      }]);
+      let outputData = ref({})
+      
+
+      const addHeader = () => {
+        headerList.push({
+          head_v: '',
+          output_v: '',
+          is_repeat: false,
+          repeat_count: 0,
+          is_group: false
+        })
+      }
+      const confirmHeader = () => {
+        console.log(headerList)
+        isFixed.value = true;
+      }
+      const cancelHeader = () => { isFixed.value = false; }
+      const changeGroupItem = (value, index) => {
+        headerList.forEach((i, k) => k != index ? i.is_group = false : '')
+      }
+      
+      const addGroupName = () => {exprotGroup.push({group_name: '',excel_headers: []})}
+      const confirmOutput = () => { isFixedOutput.value = true; }
+      const cancelOutput = () => { isFixedOutput.value = false; }
+
+      const newUploadFile = (e) => {
+        let file = e.target.files[0];
+        let reader = new FileReader(); //读取操作就是由它完成.
+        reader.readAsBinaryString(file);//读取文件的内容,也可以读取文件的URL
+        reader.onload = (evt) => {
+          try {
+            let data = evt.target.result,
+              workbook = XLSX.read(data, {
+                type: 'binary'
+              }), // 以二进制流方式读取得到整份excel表格对象
+              buildings = [], // 存储获取到的数据
+              fromTo = '';
+            for (let sheet in workbook.Sheets) {
+              if (workbook.Sheets.hasOwnProperty(sheet)) {
+                fromTo = workbook.Sheets[sheet]['!ref'];
+                buildings = buildings.concat(XLSX.utils.sheet_to_json(workbook.Sheets[sheet]));
+                // break; // 如果只取第一张sheet表，就取消注释这行
+              }
+            }
+            // let fileRows = buildings.length - 1;//表格内容行数，减去表头的一行
+
+            // 初始化分组
+            let GroupObj = {}
+            exprotGroup.forEach(i => {
+              GroupObj[i.group_name] = []
+            })
+            buildings.forEach(b => {
+              let gorup_i = headerList.filter(h => h.is_group)[0];
+              let g_head_n = gorup_i.head_v,g_count = gorup_i.is_repeat ? gorup_i.repeat_count : 0;
+              let obj = {};
+              if(g_count == 0) {
+                headerList.forEach(h => {
+                  if (h.is_repeat & h.repeat_count > 0) {
+                    for(let i = 0; i <= h.repeat_count; i++) {
+                      let v_ = i == 0 ? b[h.head_v] : b[`${h.head_v}_${i}`];
+                      if (v_) {
+                        i == 0 ? obj[output_v] = v_ : obj[`${h.head_v}_${i}`] = v_
+                      }
+                    }
+                  } else {
+                    b[h.head_v] ? obj[output_v] = b[h.head_v] : ''
+                  }
+                })
+              } else {
+
+              }
+
+            })
+          } catch (e) {
+            console.log('处理失败', e)
+            return;
+          }
+        }
+      }
+      const uploadFile = (e) => {
+        let file = e.target.files[0];
+        let reader = new FileReader(); //读取操作就是由它完成.
+        reader.readAsBinaryString(file);//读取文件的内容,也可以读取文件的URL
+        reader.onload = function (evt) {
+          try {
+            var data = evt.target.result,
+              workbook = XLSX.read(data, {
+                type: 'binary'
+              }), // 以二进制流方式读取得到整份excel表格对象
+              buildings = []; // 存储获取到的数据
+            var fromTo = '';
+            // 遍历每张表读取
+            for (var sheet in workbook.Sheets) {
+              if (workbook.Sheets.hasOwnProperty(sheet)) {
+                fromTo = workbook.Sheets[sheet]['!ref'];
+                buildings = buildings.concat(XLSX.utils.sheet_to_json(workbook.Sheets[sheet]));
+                // break; // 如果只取第一张sheet表，就取消注释这行
+              }
+            }
+            // console.log(workbook)
+            // let fileRows = buildings.length - 1;//表格内容行数，减去表头的一行
+            let BrandArr = [];
+            let CategoryArr = [];
+            let EfficacyArr = [];
+            let OtherArr = [];
+            buildings.forEach(i => {
+              let is_push = false;
+              if (i['搜索词'] && i['类目'] && i['分类.CN_1'] && i['分类.EN_1'] && i['分类.EN_1'] == 'Category') {
+                is_push = true;
+                CategoryArr.push({
+                  cn_name: i['搜索词'],
+                  en_name: i['搜索词'],
+                  value: i['搜索词'],
+                  cn_type: i['分类.CN_1'],
+                  en_type: i['分类.EN_1'],
+                  category: i['类目']
+                })
+              }
+              if (i['搜索词'] && i['类目'] && i['分类.CN_1'] && i['分类.EN_1'] && i['分类.EN_1'] == 'Efficacy') {
+                is_push = true;
+                EfficacyArr.push({
+                  cn_name: i['搜索词'],
+                  en_name: i['搜索词'],
+                  value: i['搜索词'],
+                  cn_type: i['分类.CN_1'],
+                  en_type: i['分类.EN_1'],
+                  category: i['类目']
+                })
+              }
+              if (i['brand.CN'] && i['brand.EN'] && i['分类.CN'] && i['分类.EN'] && i['分类.EN'] == 'Brand') {
+                is_push = true;
+                BrandArr.push({
+                  cn_name: i['brand.CN'],
+                  en_name: i['brand.EN'],
+                  value: i['brand.EN'],
+                  cn_type: i['分类.CN'],
+                  en_type: i['分类.EN']
+                })
+              }
+              if (!is_push) {
+                OtherArr.push(i)
+              }
+            })
+            console.log('Brand:', BrandArr)
+            console.log('Category:', CategoryArr)
+            console.log('Efficacy:', EfficacyArr)
+            console.log('Other:', OtherArr)
+            exportFile.value = {
+              Brand: BrandArr,
+              Category: CategoryArr,
+              Efficacy: EfficacyArr,
+              Other: OtherArr
+            }
+            exportFile(exportFile.value)
+          } catch (e) {
+            console.log('文件类型不正确', e);
+            return;
+          }
+        }
+      }
+
+      const exportFile = (data, file_name = 'demo.json') => {
+        if (typeof data === 'object') {
+          data = JSON.stringify(data, null, 4);
+        }
+        // 导出数据
+        const blob = new Blob([data], { type: 'text/json' }),
+          e = new MouseEvent('click'),
+          a = document.createElement('a');
+
+        a.download = file_name;
+        a.href = window.URL.createObjectURL(blob);
+        a.dataset.downloadurl = ['text/json', a.download, a.href].join(':');
+        a.dispatchEvent(e);
+      }
+      
+      return {
+        elSize,
+        headerList,
+        title,
+        isFixed,
+        isFixedOutput,
+        tabType,
+        exprotGroup,
+        outputData,
+        addHeader,
+        confirmHeader,
+        cancelHeader,
+        uploadFile,
+        addGroupName,
+        changeGroupItem,
+        confirmOutput,
+        cancelOutput
+      }
+    }
+  }).use(ElementPlus).mount('#app')
+</script>
+
+<!-- <script>
+  let dom = document.getElementById('file_input')
+  dom.onchange = function selectFile() {
+    let file = document.getElementById('file_input').files[0];
+    var reader = new FileReader(); //读取操作就是由它完成.
+    reader.readAsBinaryString(file);//读取文件的内容,也可以读取文件的URL
+    reader.onload = function (evt) {
+      try {
+        var data = evt.target.result,
+          workbook = XLSX.read(data, {
+            type: 'binary'
+          }), // 以二进制流方式读取得到整份excel表格对象
+          buildings = []; // 存储获取到的数据
+        var fromTo = '';
+        // 遍历每张表读取
+        for (var sheet in workbook.Sheets) {
+          if (workbook.Sheets.hasOwnProperty(sheet)) {
+            fromTo = workbook.Sheets[sheet]['!ref'];
+            buildings = buildings.concat(XLSX.utils.sheet_to_json(workbook.Sheets[sheet]));
+            // break; // 如果只取第一张sheet表，就取消注释这行
+          }
+        }
+        // console.log(workbook)
+        // let fileRows = buildings.length - 1;//表格内容行数，减去表头的一行
+        let BrandArr = [];
+        let CategoryArr = [];
+        let EfficacyArr = [];
+        let OtherArr = [];
+        console.log(Vue)
+        buildings.forEach(i => {
+          let is_push = false;
+          if (i['搜索词'] && i['类目'] && i['分类.CN_1'] && i['分类.EN_1'] && i['分类.EN_1'] == 'Category') {
+            is_push = true;
+            CategoryArr.push({
+              cn_name: i['搜索词'],
+              en_name: i['搜索词'],
+              value: i['搜索词'],
+              cn_type: i['分类.CN_1'],
+              en_type: i['分类.EN_1'],
+              category: i['类目']
+            })
+          }
+          if (i['搜索词'] && i['类目'] && i['分类.CN_1'] && i['分类.EN_1'] && i['分类.EN_1'] == 'Efficacy') {
+            is_push = true;
+            EfficacyArr.push({
+              cn_name: i['搜索词'],
+              en_name: i['搜索词'],
+              value: i['搜索词'],
+              cn_type: i['分类.CN_1'],
+              en_type: i['分类.EN_1'],
+              category: i['类目']
+            })
+          }
+          if (i['brand.CN'] && i['brand.EN'] && i['分类.CN'] && i['分类.EN'] && i['分类.EN'] == 'Brand') {
+            is_push = true;
+            BrandArr.push({
+              cn_name: i['brand.CN'],
+              en_name: i['brand.EN'],
+              value: i['brand.EN'],
+              cn_type: i['分类.CN'],
+              en_type: i['分类.EN']
+            })
+          }
+          if (!is_push) {
+            OtherArr.push(i)
+          }
+        })
+        console.log('Brand:', BrandArr)
+        console.log('Category:', CategoryArr)
+        console.log('Efficacy:', EfficacyArr)
+        console.log('Other:', OtherArr)
+      } catch (e) {
+        console.log('文件类型不正确', e);
+        return;
+      }
+    }
+  }
+</script> -->
+</html>

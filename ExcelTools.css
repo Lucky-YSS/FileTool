@@ -1,0 +1,119 @@
+* {
+  /* font-size: 14px; */
+}
+
+h3 {
+  font-size: 18px;
+}
+
+.container {
+  padding: 20px 20px;
+  box-sizing: border-box;
+  min-width: 1135px;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, .5);
+}
+
+.modal-area {
+  padding: 15px 20px;
+  box-sizing: border-box;
+  border-radius: 2px;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, .1);
+  margin-bottom: 15px;
+}
+
+.modal-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.excel-header-list {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 10px;
+  align-items: flex-start;
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.list-item {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+  flex: 1;
+}
+
+.header_label {
+  margin-right: 5px;
+  color: #7d7d7d;
+  flex-shrink: 0;
+}
+
+.herder_value {
+  margin-right: 10px;
+  flex-shrink: 0;
+}
+.herder_value_small {
+  width: 120px;
+  flex-shrink: 0;
+  margin-right: 10px;
+}
+
+.header-group {
+  display: flex;
+  align-items: center;
+}
+
+.header-checkbox {
+  margin-right: 10px;
+  flex-shrink: 0;
+}
+
+.button-area {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* tab */
+.tab-group{
+  display: flex;
+  justify-content: flex-start;
+  width: fit-content;
+  border-radius: 4px;
+  border: 1px solid #101010;
+  overflow: hidden;
+  cursor: pointer;
+  margin-bottom: 10px;
+}
+.tab-item{
+  color: #101010;
+  padding: 3px 6px;
+}
+.tab-item-select{
+  background-color: #101010;
+  color: #fff;
+}
+
+.add-icon-btn{
+  border-radius: 50%;
+  background-color: #101010;
+  color: #fff;
+  width: 22px;
+  height: 22px;
+  text-align: center;
+  line-height: 22px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.disable-box{
+  cursor: not-allowed;
+  pointer-events: none;
+  color: #ccc;
+}
+
+.pre-area{
+  max-height: 100vh;
+  overflow-y: auto;
+}
