@@ -11,6 +11,7 @@
 <link rel="stylesheet" href="//unpkg.com/element-plus/dist/index.css" />
 <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
 <script src="//unpkg.com/element-plus"></script>
+<script src="//unpkg.com/@element-plus/icons-vue"></script>
 
 <body>
   <div class="container" id="app">
@@ -20,6 +21,11 @@
       <el-form ref="excelHeaderRef">
         <template v-for="(i, k) in headerList" :key="k">
           <el-row :gutter="20">
+            <div class="delete-mask" v-if="isDelete">
+              <el-icon color="#fff" @click="delHeaderItem(k)">
+                <Delete />
+              </el-icon>
+            </div>
             <el-col :span="6">
               <el-form-item :label="`表头${k+1}:`">
                 <el-input :readonly="isFixed" placeholder="请输入表头名" :disabled="isFixed" type="text"
@@ -39,7 +45,7 @@
                 </el-radio-group>
               </el-form-item>
             </el-col>
-            <el-col :span="6" v-if="i.is_repeat">
+            <el-col :span="5" v-if="i.is_repeat">
               <el-form-item label="重复次数(不算本次)">
                 <el-input-number v-model="i.repeat_count" :disabled="isFixed" :min="1" :step="1" step-strictly />
               </el-form-item>
@@ -48,18 +54,27 @@
         </template>
       </el-form>
       <div class="button-area">
-        <el-button @click="addHeader" type="primary">添加表头项</el-button>
         <div>
-          <el-button @click="confirmHeader" type="primary">确定</el-button>
-          <el-button @click="cancelHeader">取消</el-button>
+          <el-button @click="addHeader" type="primary" :disabled="isDelete">添加表头项</el-button>
+          <el-button @click="deleteHeader" type="danger" v-if="!isDelete">删除表头项</el-button>
+          <el-button @click="isDelete = false" type="danger" v-else>退出删除</el-button>
+        </div>
+        <div>
+          <el-button @click="confirmHeader" type="primary" :disabled="isDelete">确定</el-button>
+          <el-button @click="cancelHeader" :disabled="isDelete">取消</el-button>
         </div>
       </div>
     </div>
     <div class="modal-area">
       <div class="modal-title">导出文件项</div>
       <el-form>
-        <template v-for="(g, k) in exprotGroup" :key="k">
+        <template v-for="(g, k) in exportGroup" :key="k">
           <el-row :gutter="20">
+            <div class="delete-mask" v-if="isExportDelete">
+              <el-icon color="#fff" @click="delExportItem(k)">
+                <Delete />
+              </el-icon>
+            </div>
             <el-col :span="6">
               <el-form-item label="分组名称:">
                 <el-input :readonly="isFixedOutput" :disabled="isFixedOutput" type="text"
@@ -68,8 +83,9 @@
             </el-col>
             <el-col :span="6">
               <el-form-item label="包含的表头:">
-                <el-select v-model="g.excel_headers" placeholder="Select">
-                  <el-option v-for="item in headerList" :key="item.value" :label="item.head_v" :value="item.head_v" />
+                <el-select v-model="g.excel_headers" clearable multiple collapse-tags collapse-tags-tooltip placeholder="Select" @change="changeSelectHeader" :disabled="isFixedOutput">
+                  <!-- :disabled="item.repeat_count == 0" -->
+                  <el-option v-for="(item, index) in excessHeader" :key="index"  :label="item.head_v" :value="item.id" />
                 </el-select>
               </el-form-item>
             </el-col>
@@ -77,21 +93,21 @@
         </template>
       </el-form>
       <div class="add-icon-btn" @click="addGroupName">+</div>
-      <template v-if="exprotGroup.length > 1">
+      <template v-if="exportGroup.length > 1">
         <div class="modal-title" style="margin-top: 10px;">多个分组依据及对应条件</div>
         <el-form>
-          <template v-for="(i, k) in exprotGroup" :key="k">
+          <template v-for="(i, k) in exportGroup" :key="k">
             <el-row :gutter="20">
               <el-col :span="6">
                 <el-form-item :label="`分组${k+1}`">
-                  <el-select v-model="i.rulesHeader" placeholder="Select">
-                    <el-option v-for="item in headerList" :key="item.value" :label="item.head_v" :value="item.head_v" />
+                  <el-select v-model="i.rulesHeader" placeholder="Select" :disabled="isFixedOutput || isExportDelete">
+                    <el-option v-for="(item, index) in allHeader" :key="index" :label="item.head_v"  :value="item.id" />
                   </el-select>
                 </el-form-item>
               </el-col>
               <el-col :span="6">
                 <el-form-item label="匹配值:">
-                  <el-input :readonly="isFixedOutput" :disabled="isFixedOutput" type="text"
+                  <el-input :readonly="isFixedOutput" :disabled="isFixedOutput || isExportDelete" type="text"
                     v-model="i.rulesValue"></el-input>
                 </el-form-item>
               </el-col>
@@ -101,10 +117,13 @@
       </template>
       <el-divider></el-divider>
       <div class="button-area">
-        <div></div>
         <div>
-          <el-button @click="confirmOutput" type="primary">确定</el-button>
-          <el-button @click="cancelOutput">取消</el-button>
+          <el-button @click="deleteExportGroup" type="danger" v-if="!isExportDelete">删除导出项</el-button>
+          <el-button @click="isExportDelete = false" type="danger" v-else>退出删除</el-button>
+        </div>
+        <div>
+          <el-button @click="confirmOutput" type="primary" :disabled="isExportDelete">确定</el-button>
+          <el-button @click="cancelOutput" :disabled="isExportDelete">取消</el-button>
         </div>
       </div>
     </div>
@@ -118,69 +137,79 @@
   </div>
 </body>
 <script>
-  const { createApp, ref, reactive, onMounted } = Vue;
+  const { createApp, ref, reactive, onMounted, computed, watch } = Vue;
 
-  createApp({
+  const APP = createApp({
     setup() {
       const elSize = 'small';
-      let headerList = reactive([
+      let headerList = ref([
         {
           head_v: '',
           output_v: '',
           is_repeat: false,
-          repeat_count: 0,
+          repeat_count: 1,
           is_group: false
         },
         {
           head_v: '',
           output_v: '',
           is_repeat: false,
-          repeat_count: 0,
+          repeat_count: 1,
           is_group: false
         },
         {
           head_v: '',
           output_v: '',
           is_repeat: false,
-          repeat_count: 0,
+          repeat_count: 1,
           is_group: false
         }
       ]);
       let isFixed = ref(false);
       let isFixedOutput = ref(false);
+      let isDelete = ref(false);
+      let isExportDelete = ref(false);
       let title = ref('Excel');
       const config = ref({
         size: 'small'
       })
-      let exprotGroup = reactive([{
+      let exportGroup = ref([{
         group_name: '',
         excel_headers: [],
         rulesHeader: '',
         rulesValue: ''
       }]);
-      let outputData = ref({})
+      let outputData = ref({});
+      let allHeader = ref([]);
+      let excessHeader = ref([]);
 
       // 生命周期
       onMounted(() => {
-        headerList = storageFunction('get', {name: 'HEADER'})
-        exprotGroup = storageFunction('get', {name: 'OUTPUT'})
+        storageFunction('get', { name: 'HEADER' }) ? headerList.value = storageFunction('get', { name: 'HEADER' }) : ''
+        storageFunction('get', { name: 'OUTPUT' }) ? exportGroup.value = storageFunction('get', { name: 'OUTPUT' }) : ''
       })
 
       const addHeader = () => {
-        headerList.push({
+        headerList.value.push({
           head_v: '',
           output_v: '',
           is_repeat: false,
-          repeat_count: 0,
+          repeat_count: 1,
           is_group: false
         })
       }
+      const deleteHeader = () => {
+        isDelete.value = true;
+      }
+      const delHeaderItem = (index) => {
+        headerList.value.splice(index, 1);
+      }
       const storageFunction = (type = 'add', data) => {
         if (type == 'add') {
-          localStorage.setItem(data.name, data.data)
+          localStorage.setItem(data.name, JSON.stringify(data.data))
         }
         if (type == 'get') {
-          localStorage.getItem(data.name)
+          return JSON.parse(localStorage.getItem(data.name))
         }
         if (type == 'delete') {
           localStorage.removeItem(data.name)
@@ -188,16 +217,42 @@
       }
       const confirmHeader = () => {
         isFixed.value = true;
-        storageFunction('add', {name: 'HEADER', data: headerList})
+        storageFunction('add', { name: 'HEADER', data: headerList.value })
+        allHeader.value = headerList.value.map((i, index) => {
+          let obj = {
+            head_v: i.head_v,
+            value: i.output_v,
+            id: `head_${index}_excelcolumn${i.head_v}`
+          }
+          i.is_repeat ? obj.repeat_count = i.repeat_count + 1 : obj.repeat_count = 1
+          return obj;
+        })
+        excessHeader.value = JSON.parse(JSON.stringify(allHeader.value))
       }
       const cancelHeader = () => { isFixed.value = false; }
 
-      const addGroupName = () => { exprotGroup.push({ group_name: '', excel_headers: [] }) }
-      const confirmOutput = () => { 
+      const addGroupName = () => { exportGroup.value.push({ group_name: '', excel_headers: [] }) }
+      const deleteExportGroup = () => {
+        isExportDelete.value = true
+      }
+      const delExportItem = (index) => {
+        exportGroup.value.splice(index, 1);
+      }
+      const confirmOutput = () => {
         isFixedOutput.value = true;
-        storageFunction('add', {name: 'OUTPUT', data: exprotGroup})
+        storageFunction('add', { name: 'OUTPUT', data: exportGroup.value })
       }
       const cancelOutput = () => { isFixedOutput.value = false; }
+
+      const changeSelectHeader = (val) => {
+        exportGroup.value.forEach(g => {
+          allHeader.value.map((i, index) => {
+            if (g.excel_headers.includes(i.id) && i.repeat_count > 0) {
+              excessHeader.value[index].repeat_count = i.repeat_count - 1;
+            }
+          })
+        })
+      }
 
       const newUploadFile = (e) => {
         let file = e.target.files[0];
@@ -221,7 +276,7 @@
             // let fileRows = buildings.length - 1;//表格内容行数，减去表头的一行
 
             // 初始化分组
-            console.log(headerList, exprotGroup)
+            console.log(headerList.value, exportGroup.value)
             buildings.forEach(b => {
             })
           } catch (e) {
@@ -335,18 +390,33 @@
         title,
         isFixed,
         isFixedOutput,
-        exprotGroup,
+        exportGroup,
         outputData,
+        isDelete,
+        isExportDelete,
+        allHeader,
+        excessHeader,
+
         addHeader,
+        deleteHeader,
+        delHeaderItem,
         confirmHeader,
         cancelHeader,
         uploadFile,
         addGroupName,
+        deleteExportGroup,
+        delExportItem,
         confirmOutput,
-        cancelOutput
+        cancelOutput,
+        changeSelectHeader
       }
     }
-  }).use(ElementPlus, { size: 'small' }).mount('#app')
+  })
+  for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
+    APP.component(key, component)
+  }
+  APP.use(ElementPlus, { size: 'small' }).mount('#app');
+
 </script>
 
 <!-- <script>

@@ -49,3 +49,25 @@ h3 {
   max-height: 100vh;
   overflow-y: auto;
 }
+
+.delete-mask{
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: calc(100% - 8px);
+  background-color: #616161;
+  transform: translateY(-5px);
+  opacity: .5;
+  z-index: 10;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+}
+.delete-mask:hover{
+  opacity: .7;
+  box-shadow: 0 4px 5px 0 #0000008f;
+  cursor: pointer;
+}
